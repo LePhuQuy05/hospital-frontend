@@ -14,6 +14,18 @@ export const ToastProvider = ({ children }) => {
     }, 3000);
   }, []);
 
+  useEffect(() => {
+    const handleAppToast = (event) => {
+      const { message, type } = event.detail || {};
+      if (message) {
+        addToast(message, type || 'info');
+      }
+    };
+
+    window.addEventListener('app-toast', handleAppToast);
+    return () => window.removeEventListener('app-toast', handleAppToast);
+  }, [addToast]);
+
   const value = useMemo(() => ({ addToast }), [addToast]);
 
   return (

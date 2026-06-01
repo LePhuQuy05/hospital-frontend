@@ -72,14 +72,25 @@ const refreshAuthToken = async () => {
   return responseData.accessToken;
 };
 
+const dispatchToast = (message, type = 'info') => {
+  window.dispatchEvent(new CustomEvent('app-toast', { detail: { message, type } }));
+};
+
 client.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.data && response.data.success === false) {
+      const error = new Error(response.data.message || 'Request failed');
+      error.response = { data: response.data, status: response.status };
+      return Promise.reject(error);
+    }
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config;
     const status = error.response?.status;
-    const isAuthRequest = originalRequest.url?.includes('/api/auth/');
+    const isAuthRequest = originalRequest?.url?.includes('/api/auth/');
 
-    if (status === 401 && !originalRequest._retry && !isAuthRequest) {
+    if (status === 401 && !originalRequest?._retry && !isAuthRequest) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -115,7 +126,15 @@ client.interceptors.response.use(
     }
 
     if (status === 403) {
-      console.warn('Forbidden request');
+      dispatchToast('Không có quyền truy cập', 'warning');
+    }
+
+    if (status === 404) {
+      dispatchToast('Không tìm thấy', 'warning');
+    }
+
+    if (status === 500) {
+      dispatchToast('Lỗi máy chủ, thử lại sau', 'error');
     }
 
     return Promise.reject(error);
