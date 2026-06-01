@@ -11,6 +11,8 @@ import MedicineFormPage from '../pages/medicines/MedicineFormPage';
 import InvoiceListPage from '../pages/invoices/InvoiceListPage';
 import InvoiceDetailPage from '../pages/invoices/InvoiceDetailPage';
 import PatientInvoicesPage from '../pages/invoices/PatientInvoicesPage';
+import UserListPage from '../pages/users/UserListPage';
+import UserFormPage from '../pages/users/UserFormPage';
 import PlaceholderPage from '../pages/PlaceholderPage';
 import NotFoundPage from '../pages/NotFoundPage';
 import ForbiddenPage from '../pages/ForbiddenPage';
@@ -43,7 +45,7 @@ const Router = () => (
         path="/users"
         element={
           <RoleGuard allowedRoles={['ADMIN']}>
-            <PlaceholderPage title="User Management" />
+            <UserListPage />
           </RoleGuard>
         }
       />
@@ -51,7 +53,7 @@ const Router = () => (
         path="/users/new"
         element={
           <RoleGuard allowedRoles={['ADMIN']}>
-            <PlaceholderPage title="Create User" />
+            <UserFormPage />
           </RoleGuard>
         }
       />
@@ -59,7 +61,7 @@ const Router = () => (
         path="/users/:id/edit"
         element={
           <RoleGuard allowedRoles={['ADMIN']}>
-            <PlaceholderPage title="Edit User" />
+            <UserFormPage />
           </RoleGuard>
         }
       />
