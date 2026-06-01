@@ -11,6 +11,7 @@ import MedicineFormPage from '../pages/medicines/MedicineFormPage';
 import InvoiceListPage from '../pages/invoices/InvoiceListPage';
 import InvoiceDetailPage from '../pages/invoices/InvoiceDetailPage';
 import PatientInvoicesPage from '../pages/invoices/PatientInvoicesPage';
+import AuditLogPage from '../pages/audit/AuditLogPage';
 import UserListPage from '../pages/users/UserListPage';
 import UserFormPage from '../pages/users/UserFormPage';
 import PlaceholderPage from '../pages/PlaceholderPage';
@@ -69,7 +70,7 @@ const Router = () => (
         path="/audit-logs"
         element={
           <RoleGuard allowedRoles={['ADMIN']}>
-            <PlaceholderPage title="Audit Logs" />
+            <AuditLogPage />
           </RoleGuard>
         }
       />
