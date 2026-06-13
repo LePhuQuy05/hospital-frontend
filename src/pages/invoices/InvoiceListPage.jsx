@@ -1,20 +1,54 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import * as invoicesApi from '../../api/invoicesApi';
+import * as patientsApi from '../../api/patientsApi';
 import { useToast } from '../../components/ToastContainer';
 import DataTable from '../../components/DataTable';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
+import SearchSelectInput from '../../components/SearchSelectInput';
 import { formatCurrency, formatDateTime } from '../../utils/formatters';
 
 const InvoiceListPage = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
+
+  // Patient search (primary flow)
+  const [patientId, setPatientId] = useState('');
+  const [patientLabel, setPatientLabel] = useState('');
+
+  // Direct invoice ID lookup (secondary / fallback)
   const [invoiceId, setInvoiceId] = useState('');
   const [invoice, setInvoice] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchError, setSearchError] = useState('');
+
+  const fetchPatientOptions = useCallback(async (keyword) => {
+    try {
+      const response = await patientsApi.searchPatients(keyword);
+      const patients = response.data?.data || [];
+      return patients.map((p) => ({
+        id: p.id,
+        label: p.fullName || `Patient #${p.id}`,
+        sub: `ID: ${p.id}${p.phone ? ` · ${p.phone}` : ''}${p.cccd ? ` · CCCD: ${p.cccd}` : ''}`,
+      }));
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const handlePatientSelect = (id, item) => {
+    setPatientId(String(id));
+    setPatientLabel(item.label);
+    // Navigate directly to patient invoice history
+    navigate(`/patients/${id}/invoices`);
+  };
+
+  const handlePatientClear = () => {
+    setPatientId('');
+    setPatientLabel('');
+  };
 
   const handleSearch = async (event) => {
     event.preventDefault();
@@ -35,12 +69,6 @@ const InvoiceListPage = () => {
       addToast(error.response?.data?.message || 'Invoice not found', 'error');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleViewHistory = () => {
-    if (invoice?.patientId) {
-      navigate(`/patients/${invoice.patientId}/invoices`);
     }
   };
 
@@ -82,34 +110,50 @@ const InvoiceListPage = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-slate-900">Invoices</h1>
-        <p className="mt-1 text-slate-500">Search invoice by ID or view patient invoice history.</p>
+        <p className="mt-1 text-slate-500">Search by patient name to view invoice history, or look up a specific invoice by ID.</p>
       </div>
 
-      <form className="grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={handleSearch}>
-        <div className="space-y-2">
-          <label htmlFor="invoiceId" className="block text-sm font-medium text-slate-700">
-            Invoice ID
-          </label>
-          <input
-            id="invoiceId"
-            value={invoiceId}
-            onChange={(e) => setInvoiceId(e.target.value)}
-            placeholder="Enter invoice ID"
-            className={`w-full rounded-2xl border px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100 ${
-              searchError ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'
-            }`}
-          />
-          {searchError && <p className="text-sm text-rose-600">{searchError}</p>}
-        </div>
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-        >
-          <Search className="mr-2 h-4 w-4" />
-          Search
-        </button>
-      </form>
+      {/* Primary: Patient name search */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-3 text-base font-semibold text-slate-800">Search by Patient</h2>
+        <SearchSelectInput
+          placeholder="Type patient name, phone, or CCCD..."
+          value={patientId}
+          selectedLabel={patientLabel}
+          onSelect={handlePatientSelect}
+          onClear={handlePatientClear}
+          fetchOptions={fetchPatientOptions}
+        />
+        <p className="mt-2 text-xs text-slate-500">
+          Selecting a patient will open their full invoice history.
+        </p>
+      </div>
+
+      {/* Secondary: Direct Invoice ID lookup */}
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-3 text-base font-semibold text-slate-800">Lookup by Invoice ID</h2>
+        <form className="grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={handleSearch}>
+          <div className="space-y-2">
+            <input
+              id="invoiceId"
+              value={invoiceId}
+              onChange={(e) => setInvoiceId(e.target.value)}
+              placeholder="Enter invoice ID"
+              className={`w-full rounded-2xl border px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100 ${
+                searchError ? 'border-rose-300 bg-rose-50' : 'border-slate-200 bg-slate-50'
+              }`}
+            />
+            {searchError && <p className="text-sm text-rose-600">{searchError}</p>}
+          </div>
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+          >
+            Search
+          </button>
+        </form>
+      </div>
 
       {isLoading ? (
         <LoadingState />
@@ -124,7 +168,7 @@ const InvoiceListPage = () => {
               {invoice.patientId && (
                 <button
                   type="button"
-                  onClick={handleViewHistory}
+                  onClick={() => navigate(`/patients/${invoice.patientId}/invoices`)}
                   className="inline-flex items-center gap-2 rounded-2xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white hover:bg-sky-700"
                 >
                   View patient history
@@ -135,7 +179,7 @@ const InvoiceListPage = () => {
           <DataTable columns={columns} data={[invoice]} emptyText="No invoice found." />
         </div>
       ) : (
-        <EmptyState message="Search for an invoice by ID to see details." />
+        <EmptyState message="Search by patient name or invoice ID above." />
       )}
     </div>
   );

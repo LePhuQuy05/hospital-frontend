@@ -25,7 +25,7 @@ const InvoiceDetailPage = () => {
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const canPay = invoice?.status === 'PENDING' && roles.some((role) => ['ADMIN', 'NURSE'].includes(role));
+  const canPay = invoice?.status === 'PENDING' && roles.some((role) => ['ADMIN', 'NURSE', 'CASHIER'].includes(role));
 
   useEffect(() => {
     const fetchInvoice = async () => {

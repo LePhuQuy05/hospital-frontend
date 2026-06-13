@@ -8,10 +8,14 @@ const getStoredUser = () => {
   const username = localStorage.getItem('username');
   const roles = localStorage.getItem('roles');
   if (!username || !roles) return null;
-  return {
-    username,
-    roles: JSON.parse(roles),
-  };
+  try {
+    return {
+      username,
+      roles: JSON.parse(roles),
+    };
+  } catch {
+    return null;
+  }
 };
 
 const saveSession = ({ accessToken, refreshToken, username, roles }) => {
@@ -29,8 +33,9 @@ const clearSession = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(getStoredUser());
-  const [roles, setRoles] = useState(user?.roles || []);
+  const storedUser = getStoredUser();
+  const [user, setUser] = useState(storedUser ? { username: storedUser.username } : null);
+  const [roles, setRoles] = useState(storedUser?.roles || []);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -45,12 +50,23 @@ export const AuthProvider = ({ children }) => {
       try {
         const response = await authApi.getMe();
         const profile = response.data?.data;
-        setUser({ username: profile.username });
-        setRoles(profile.roles || []);
+        if (profile) {
+          setUser({ username: profile.username });
+          setRoles(profile.roles || []);
+          // Cập nhật lại localStorage với roles mới nhất từ server
+          localStorage.setItem('username', profile.username);
+          localStorage.setItem('roles', JSON.stringify(profile.roles || []));
+        }
       } catch (error) {
-        clearSession();
-        setUser(null);
-        setRoles([]);
+        // Chỉ xóa session khi server xác nhận token không hợp lệ (401/403)
+        // Không xóa khi lỗi mạng (network error) để tránh đăng xuất oan
+        const status = error.response?.status;
+        if (status === 401 || status === 403) {
+          clearSession();
+          setUser(null);
+          setRoles([]);
+        }
+        // Nếu lỗi mạng (không có status): giữ nguyên state từ localStorage
       } finally {
         setIsLoading(false);
       }

@@ -39,6 +39,10 @@ client.interceptors.request.use((config) => {
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  if (config.data instanceof FormData && config.headers) {
+    delete config.headers['Content-Type'];
+    delete config.headers['content-type'];
+  }
   return config;
 });
 
@@ -76,9 +80,33 @@ const dispatchToast = (message, type = 'info') => {
   window.dispatchEvent(new CustomEvent('app-toast', { detail: { message, type } }));
 };
 
+// Đọc message từ error response, kể cả khi responseType là 'blob'
+const getErrorMessageFromResponse = async (error) => {
+  const data = error.response?.data;
+  if (!data) return null;
+
+  // Nếu response là Blob (do responseType: 'blob'), parse sang JSON để lấy message
+  if (data instanceof Blob) {
+    try {
+      const text = await data.text();
+      const json = JSON.parse(text);
+      return json?.message || null;
+    } catch {
+      return null;
+    }
+  }
+
+  return data?.message || null;
+};
+
 client.interceptors.response.use(
   (response) => {
-    if (response.data && response.data.success === false) {
+    // Bỏ qua success-check với blob response (binary data không có field 'success')
+    if (
+      response.data &&
+      !(response.data instanceof Blob) &&
+      response.data.success === false
+    ) {
       const error = new Error(response.data.message || 'Request failed');
       error.response = { data: response.data, status: response.status };
       return Promise.reject(error);
@@ -88,9 +116,16 @@ client.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
     const status = error.response?.status;
-    const isAuthRequest = originalRequest?.url?.includes('/api/auth/');
 
-    if (status === 401 && !originalRequest?._retry && !isAuthRequest) {
+    // Chỉ coi là auth-request thuần (login/refresh/logout) - KHÔNG bao gồm /api/auth/me
+    // vì /me là protected endpoint cần token refresh như các endpoint khác
+    const isLoginOrRefresh =
+      originalRequest?.url?.includes('/api/auth/login') ||
+      originalRequest?.url?.includes('/api/auth/refresh') ||
+      originalRequest?.url?.includes('/api/auth/logout');
+
+    // Thử refresh token với mọi 401 (kể cả /api/auth/me), trừ login/refresh/logout
+    if (status === 401 && !originalRequest?._retry && !isLoginOrRefresh) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
@@ -99,7 +134,7 @@ client.interceptors.response.use(
             originalRequest.headers.Authorization = `Bearer ${token}`;
             return client(originalRequest);
           })
-          .catch(Promise.reject);
+          .catch((err) => Promise.reject(err));
       }
 
       originalRequest._retry = true;
@@ -120,7 +155,8 @@ client.interceptors.response.use(
       }
     }
 
-    if (status === 401 && isAuthRequest) {
+    // Login / refresh endpoint bị 401 → xóa session và về login
+    if (status === 401 && isLoginOrRefresh) {
       clearAuthStorage();
       window.location.href = '/login';
     }
